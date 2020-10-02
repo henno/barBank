@@ -1,0 +1,134 @@
+openapi: 3.0.2
+info:
+  title: barBank
+  version: 1.0.0
+paths:
+  /users:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/postUsersRequest'
+        required: true
+      tags:
+        - users
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/userObject'
+          description: User successfully registered.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+              examples:
+                Invalid password:
+                  value:
+                    error: Invalid password
+                Parameter is required:
+                  value:
+                    error: 'User validation failed: {param}: Path `{param}` is required.'
+          description: Bad request
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+              examples:
+                Username already exists:
+                  value:
+                    error: Username already exists
+          description: Username already exists
+      summary: Registers a new user
+components:
+  schemas:
+    postUsersRequest:
+      title: POST /users request
+      description: ''
+      required:
+        - name
+        - username
+        - password
+      type: object
+      properties:
+        name:
+          description: User's full name
+          type: string
+        username:
+          description: Desired username
+          type: string
+        password:
+          format: password
+          description: Desired password
+          type: string
+      example:
+        name: Miki Hiir
+        username: miki
+        password: plutoonium
+    userObject:
+      title: userObject
+      description: ''
+      type: object
+      properties:
+        accounts:
+          description: Array of user's bank accounts
+          type: array
+          items:
+            $ref: '#/components/schemas/accountObject'
+        password:
+          type: string
+        name:
+          description: User's full name
+          type: string
+        username:
+          type: string
+        id:
+          description: User's ID
+          type: string
+      example:
+        id: 5f7739fedc144dc2b25cfa75
+        name: Miki Hiir
+        username: miki
+        accounts:
+          -
+            name: Main
+            balance: 100000
+            currency: EUR
+            number: abc633520f3596e174fd17832eefa508c0b
+            id: 5f7739fedc144dc2b25cfa76
+    accountObject:
+      title: accountObject
+      description: ''
+      type: object
+      properties:
+        name:
+          description: Account's friendly name
+          type: string
+        balance:
+          format: int32
+          description: The funds the account holds
+          type: integer
+        currency:
+          description: The currency of the funds
+          type: string
+        number:
+          description: Account's number
+          type: string
+      example:
+        name: Main
+        balance: 100000
+        currency: EUR
+        number: abca008ea375429bf1b24d47cb73123e5ff
+    errorResponse:
+      title: Root Type for errorResponse
+      description: ''
+      type: object
+      properties:
+        error:
+          type: string
+      example:
+        error: Error message.

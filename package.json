@@ -1,0 +1,23 @@
+{
+  "name": "barBank",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon -e yaml,js index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcrypt": "^5.0.0",
+    "dotenv": "^8.2.0",
+    "express": "^4.17.1",
+    "mongodb": "^3.6.2",
+    "mongoose": "^5.10.7",
+    "nodemon": "^2.0.4",
+    "swagger-ui-express": "^4.1.4",
+    "yamljs": "^0.3.0",
+    "md5": "^2.3.0"
+  }
+}
