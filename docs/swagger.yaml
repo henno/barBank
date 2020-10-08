@@ -95,6 +95,34 @@ paths:
         -
           Token: []
       summary: Logs the user out
+  /users/current:
+    get:
+      tags:
+        - users
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/getUsersCurrentRespose'
+          description: Succesful request
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+              examples:
+                Missing Authorization header:
+                  value:
+                    error: Missing Authorization header
+                Invalid token:
+                  value:
+                    error: Invalid token
+          description: Unauthorized
+      security:
+        -
+          Token: []
+      summary: Returns currently logged in user's data
 components:
   schemas:
     postUsersRequest:
@@ -129,7 +157,7 @@ components:
           description: Array of user's bank accounts
           type: array
           items:
-            $ref: '#/components/schemas/accountObject'
+            $ref: '#/components/schemas/account'
         password:
           type: string
         name:
@@ -151,29 +179,6 @@ components:
             currency: EUR
             number: abc633520f3596e174fd17832eefa508c0b
             id: 5f7739fedc144dc2b25cfa76
-    accountObject:
-      title: accountObject
-      description: ''
-      type: object
-      properties:
-        name:
-          description: Account's friendly name
-          type: string
-        balance:
-          format: int32
-          description: The funds the account holds
-          type: integer
-        currency:
-          description: The currency of the funds
-          type: string
-        number:
-          description: Account's number
-          type: string
-      example:
-        name: Main
-        balance: 100000
-        currency: EUR
-        number: abca008ea375429bf1b24d47cb73123e5ff
     errorResponse:
       title: errorResponse
       description: ''
@@ -209,6 +214,50 @@ components:
           type: string
       example:
         token: 5f7ed005ec495f0bbbaa15f3
+    getUsersCurrentRespose:
+      title: Root Type for getUsersCurrentRespose
+      description: ''
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        username:
+          type: string
+        accounts:
+          description: Array of user's accounts
+          type: array
+          items:
+            $ref: '#/components/schemas/account'
+      example:
+        id: 5f7ec5b3ef096607de0e89f3
+        name: Foo
+        username: user
+        accounts:
+          -
+            name: Main
+            balance: 100000
+            currency: EUR
+            number: abceaf7076184bdb8b74faea17d1c3c3287
+    account:
+      title: Root Type for account
+      description: ''
+      type: object
+      properties:
+        name:
+          type: string
+        balance:
+          type: integer
+        currency:
+          type: string
+        number:
+          type: string
+      example:
+        name: Main
+        balance: 100000
+        currency: EUR
+        number: abceaf7076184bdb8b74faea17d1c3c3287
   securitySchemes:
     Token:
       scheme: bearer
