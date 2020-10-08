@@ -44,6 +44,57 @@ paths:
                     error: Username already exists
           description: Username already exists
       summary: Registers a new user
+  /sessions:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/postSessionsRequest'
+        required: true
+      tags:
+        - sessions
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/postSessionsResponse'
+          description: User logged in successfully
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+              examples:
+                Invalid username/password:
+                  value:
+                    error: Invalid username/password
+          description: Invalid username/password
+      summary: Logs the user in
+    delete:
+      tags:
+        - sessions
+      responses:
+        '204':
+          description: User logged out successfully
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+              examples:
+                Missing Authorization header:
+                  value:
+                    error: Missing Authorization header
+                Invalid token:
+                  value:
+                    error: Invalid token
+          description: Unauthorized
+      security:
+        -
+          Token: []
+      summary: Logs the user out
 components:
   schemas:
     postUsersRequest:
@@ -124,7 +175,7 @@ components:
         currency: EUR
         number: abca008ea375429bf1b24d47cb73123e5ff
     errorResponse:
-      title: Root Type for errorResponse
+      title: errorResponse
       description: ''
       type: object
       properties:
@@ -132,3 +183,34 @@ components:
           type: string
       example:
         error: Error message.
+    postSessionsRequest:
+      title: POST /sessions request
+      description: ''
+      type: object
+      properties:
+        username:
+          description: A valid username
+          type: string
+        password:
+          description: The password associated with given username
+          type: string
+      example:
+        username: miki
+        password: plutoonium
+    postSessionsResponse:
+      title: POST /sessions response
+      description: ''
+      type: object
+      properties:
+        token:
+          description: >-
+            A session token which needs to be sent back to server in Authorization header with
+            every request (Authorization: Bearer <token>)
+          type: string
+      example:
+        token: 5f7ed005ec495f0bbbaa15f3
+  securitySchemes:
+    Token:
+      scheme: bearer
+      type: http
+      description: A Bearer scheme
