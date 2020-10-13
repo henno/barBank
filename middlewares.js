@@ -3,7 +3,9 @@ const sessionModel = require('./models/Session')
 const transactionModel = require('./models/Transaction')
 const bankModel = require('./models/Bank')
 const fetch = require('node-fetch')
-
+const jose = require('node-jose');
+const fs = require('fs');
+const abortController = require('abort-controller');
 
 exports.verifyToken = async (req, res, next) => {
 
@@ -34,36 +36,138 @@ exports.verifyToken = async (req, res, next) => {
     return next(); // Pass the request to the next middleware
 }
 
+
 exports.processTransactions = async () => {
+
+    let serverResponseAsJson
+        , serverResponseAsPlainText
+        , serverResponseAsObject
+        , timeout
+
 
     // Get pending transactions
     const pendingTransactions = await transactionModel.find({status: 'pending'})
 
-    // Contact destination bank
-    const banks = await fetch(`${process.env.CENTRAL_BANK_URL}/banks`, {
-        headers: {'Api-Key': process.env.CENTRAL_BANK_API_KEY}
-    })
-        .then(responseText => responseText.json())
-
+    // Loop through each transaction and send a request
     pendingTransactions.forEach(async transaction => {
 
-        const bankTo = await bankModel.findOne({bankPrefix: transaction.accountTo.slice(0,3)})
+        console.log('Processing transaction...');
 
-        console.log(bankTo.transactionUrl);
-        const r = await fetch(bankTo.transactionUrl, {
-            method: 'POST',
-            body: JSON.stringify(transaction),
-            headers: {
-                'Api-Key': process.env.CENTRAL_BANK_API_KEY,
-                'Content-Type': 'application/json'
-            }
-        })
-            .then(responseText => responseText.json())
 
-        console.log(r);
+        // Attach a new instance of an abort controller to transaction to be able to cancel long running requests
+        transaction.abortController = new abortController()
+
+        // Set transaction status to in progress
+        transaction.status = 'inProgress'
+        transaction.save();
+
+        const bankTo = await bankModel.findOne({bankPrefix: transaction.accountTo.slice(0, 3)})
+
+
+        // Create jwt
+        const privateKey = fs.readFileSync('./keys/private.key').toString()
+        const keystore = jose.JWK.createKeyStore();
+        const key = await keystore.add(privateKey, 'pem')
+        const jwt = await jose.JWS.createSign({
+            alg: 'RS256',
+            format: 'compact'
+        }, key).update(JSON.stringify(transaction)).final()
+
+        // Send request to remote bank
+        try {
+
+            console.log('Making request to ' + bankTo.transactionUrl);
+
+            // Abort connection after 1 sec
+            timeout = setTimeout(() => {
+
+                console.log('Aborting long-running transaction');
+
+                // Abort the request
+                transaction.abortController.abort()
+
+                // Remove abort controller
+                transaction.abortController = null
+                console.log(transaction);
+
+                // Set transaction status back to pending
+                transaction.status = 'pending'
+                transaction.statusDetail = 'Server is not responding'
+                transaction.save();
+
+            }, 1000)
+
+            serverResponseAsObject = await fetch(bankTo.transactionUrl, {
+                signal: transaction.abortController.signal,
+                method: 'POST',
+                redirect: 'follow',
+                body: JSON.stringify({jwt}),
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+
+            serverResponseAsPlainText = await serverResponseAsObject.text()
+
+
+            //.then(responseText => responseText.text())
+
+
+        } catch (e) {
+            console.log(e.message);
+        }
+
+        // Cancel aborting
+        clearTimeout(timeout)
+
+        // Server did not respond (we aborted before that)
+        if (typeof serverResponseAsPlainText === 'undefined') {
+
+            // Stop processing this transaction for now and take the next one
+            return
+        }
+
+        // Attempt to parse server response to JSON
+        try {
+            serverResponseAsJson = JSON.parse(serverResponseAsPlainText)
+        } catch (e) {
+            console.log(e.message + ". Response was: " + serverResponseAsPlainText)
+            transaction.status = 'failed'
+            transaction.statusDetail = 'The other bank said ' + serverResponseAsPlainText
+            transaction.abortController = null
+            transaction.save()
+            return
+        }
+
+        console.log(serverResponseAsObject.status);
+
+        // Log bad responses from server to transaction statusDetail
+        if (serverResponseAsObject.status < 200 || serverResponseAsObject.status >= 300) {
+            console.log('Server response was '+ serverResponseAsObject.status);
+            transaction.status = 'failed'
+            transaction.statusDetail = typeof serverResponseAsJson.error !== 'undefined' ?
+                serverResponseAsJson.error : serverResponseAsPlainText
+            transaction.save()
+            return
+        }
+
+        // Add receiverName to transaction
+        transaction.receiverName = serverResponseAsJson.receiverName
+
+        // Update transaction status to completed
+        transaction.status = 'completed'
+        transaction.statusDetail = ''
+
+        // Remove abort controller
+        delete transaction.abortController
+
+        // Write changes to DB
+        transaction.save()
 
     }, Error())
 
+
+    // Call same function again after 1 sec
     setTimeout(exports.processTransactions, 1000)
 
 }

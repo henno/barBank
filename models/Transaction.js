@@ -8,7 +8,10 @@ module.exports = mongoose.model('Transaction', new mongoose.Schema({
     accountTo: {type: String, required: true},
     explanation: {type: String, required: true, minlength: 1},
     senderName: {type: String, required: true, minlength: 1},
-    status: {type: String, required: true, enum : ['pending','completed', 'inProgress', 'failed'], default: 'pending'}
+    receiverName: {type: String, required: false, minlength: 1},
+    abortController: {type: Object, required: false},
+    status: {type: String, required: true, enum : ['pending','completed', 'inProgress', 'failed'], default: 'pending'},
+    statusDetail: {type: String, required:false}
 }, {
     toJSON: {
         transform: function (docIn, docOut) {
