@@ -2,6 +2,10 @@ openapi: 3.0.2
 info:
   title: barBank
   version: 1.0.0
+servers:
+  -
+    url: 'http://localhost:1234'
+    description: ''
 paths:
   /users:
     post:
@@ -104,7 +108,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/getUsersCurrentRespose'
+                $ref: '#/components/schemas/getUsersCurrentResponse'
           description: Succesful request
         '401':
           content:
@@ -123,6 +127,64 @@ paths:
         -
           Token: []
       summary: Returns currently logged in user's data
+  /transactions:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/postTransactionsRequest'
+        required: true
+      tags:
+        - transactions
+      responses:
+        '201':
+          content:
+            application/json: {}
+          description: Transaction has been successfully queued for processing
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+              examples:
+                invalidAmount:
+                  value:
+                    error: Invalid amount
+                invalidAccountTo:
+                  value:
+                    error: Invalid accountTo
+          description: Invalid amount
+        '402':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+              examples:
+                insufficientFunds:
+                  value:
+                    error: Insufficient funds
+          description: Insufficient funds
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+              examples:
+                forbidden:
+                  value:
+                    error: Forbidden
+          description: The accountFrom does not belong to the user
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+              examples:
+                accountNotFound:
+                  value:
+                    error: Account not found
+          description: Account not found
 components:
   schemas:
     postUsersRequest:
@@ -149,7 +211,7 @@ components:
         username: miki
         password: plutoonium
     userObject:
-      title: userObject
+      title: user object
       description: ''
       type: object
       properties:
@@ -180,7 +242,7 @@ components:
             number: abc633520f3596e174fd17832eefa508c0b
             id: 5f7739fedc144dc2b25cfa76
     errorResponse:
-      title: errorResponse
+      title: error object
       description: ''
       type: object
       properties:
@@ -214,8 +276,8 @@ components:
           type: string
       example:
         token: 5f7ed005ec495f0bbbaa15f3
-    getUsersCurrentRespose:
-      title: Root Type for getUsersCurrentRespose
+    getUsersCurrentResponse:
+      title: GET /users/current response
       description: ''
       type: object
       properties:
@@ -241,7 +303,7 @@ components:
             currency: EUR
             number: abceaf7076184bdb8b74faea17d1c3c3287
     account:
-      title: Root Type for account
+      title: account object
       description: ''
       type: object
       properties:
@@ -258,6 +320,29 @@ components:
         balance: 100000
         currency: EUR
         number: abceaf7076184bdb8b74faea17d1c3c3287
+    postTransactionsRequest:
+      title: POST /transactions request
+      description: ''
+      type: object
+      properties:
+        accountFrom:
+          description: Sender's bank account
+          type: string
+        accountTo:
+          description: Receiver's bank account
+          type: string
+        amount:
+          format: int32
+          description: The sum
+          type: integer
+        explanation:
+          description: Purpose of the transaction
+          type: string
+      example:
+        accountFrom: RU000000001
+        accountTo: BY000000001
+        amount: 1500000000
+        explanation: Don’t go spend it all at once
   securitySchemes:
     Token:
       scheme: bearer
