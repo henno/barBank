@@ -59,7 +59,7 @@ exports.processTransactions = async () => {
     // Loop through each transaction and send a request
     pendingTransactions.forEach(async transaction => {
 
-        console.log('Processing transaction...');
+        console.log('loop: Processing transaction...');
 
         // Calculate transaction expiry time
         transactionExpiryTime = new Date(
@@ -99,7 +99,7 @@ exports.processTransactions = async () => {
 
         if (typeof centralBankResult !== "undefined" && centralBankResult.error !== 'undefined') {
 
-            console.log('There was an error when tried to reach central bank')
+            console.log('loop: There was an error when tried to reach central bank')
             console.log(centralBankResult.error)
 
             // Set transaction status back to pending
@@ -118,7 +118,7 @@ exports.processTransactions = async () => {
 
         if (!bankTo) {
 
-            console.log('WARN: Failed to get bankTo')
+            console.log('loop: WARN: Failed to get bankTo')
             // Set transaction status failed
             transaction.status = 'failed'
             transaction.statusDetail = 'There is no bank with prefix ' + bankPrefix
@@ -132,17 +132,24 @@ exports.processTransactions = async () => {
         const jwt = await jose.JWS.createSign({
             alg: 'RS256',
             format: 'compact'
-        }, key).update(JSON.stringify(transaction)).final()
+        }, key).update(JSON.stringify({
+            accountFrom: transaction.accountFrom,
+            accountTo: transaction.accountTo,
+            currency: transaction.currency,
+            amount: transaction.amount,
+            explanation: transaction.explanation,
+            senderName: transaction.senderName
+        }), 'utf8').final()
 
         // Send request to remote bank
         try {
 
-            console.log('Making request to ' + bankTo.transactionUrl);
+            console.log('loop: Making request to ' + bankTo.transactionUrl);
 
             // Abort connection after 1 sec
             timeout = setTimeout(() => {
 
-                console.log('Aborting long-running transaction');
+                console.log('loop: Aborting long-running transaction');
 
                 // Abort the request
                 transactionData.abortController.abort()
@@ -168,7 +175,7 @@ exports.processTransactions = async () => {
             serverResponseAsPlainText = await serverResponseAsObject.text()
 
         } catch (e) {
-            console.log('Making request to another bank failed with the following message: ' + e.message)
+            console.log('loop: Making request to another bank failed with the following message: ' + e.message)
         }
 
         // Cancel aborting
@@ -187,7 +194,7 @@ exports.processTransactions = async () => {
         } catch (e) {
 
             // Log the error
-            console.log(e.message + ". Response was: " + serverResponseAsPlainText)
+            console.log('loop: '+ e.message + ". Response was: " + serverResponseAsPlainText)
             transaction.status = 'failed'
             transaction.statusDetail = 'The other bank said ' + serverResponseAsPlainText
             transactionData.abortController = null
@@ -199,7 +206,7 @@ exports.processTransactions = async () => {
 
         // Log bad responses from server to transaction statusDetail
         if (serverResponseAsObject.status < 200 || serverResponseAsObject.status >= 300) {
-            console.log('Server response was ' + serverResponseAsObject.status);
+            console.log('loop: Server response was ' + serverResponseAsObject.status);
             transaction.status = 'failed'
             transaction.statusDetail = typeof serverResponseAsJson.error !== 'undefined' ?
                 serverResponseAsJson.error : serverResponseAsPlainText
@@ -216,7 +223,7 @@ exports.processTransactions = async () => {
         account.save();
 
         // Update transaction status to completed
-        console.log('Transaction '+ transaction.id+ ' completed')
+        console.log('loop: Transaction '+ transaction.id+ ' completed')
         transaction.status = 'completed'
         transaction.statusDetail = ''
 
