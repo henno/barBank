@@ -4,7 +4,7 @@ const transactionModel = require('./models/Transaction')
 const accountModel = require('./models/Account')
 const bankModel = require('./models/Bank')
 const fetch = require('node-fetch')
-const axios = require('axios')
+const got = require('got');
 const jose = require('node-jose');
 const fs = require('fs');
 
@@ -42,9 +42,6 @@ exports.verifyToken = async (req, res, next) => {
 
 exports.processTransactions = async () => {
 
-    let oServerResponse
-        , timeout
-        , bankTo
 
     // Init jose keystore
     const privateKey = fs.readFileSync('./keys/private.key').toString()
@@ -56,6 +53,11 @@ exports.processTransactions = async () => {
 
     // Loop through each transaction and send a request
     pendingTransactions.forEach(async transaction => {
+
+        let oServerResponse
+            , timeout
+            , bankTo
+
 
         console.log('loop: Processing transaction...');
 
@@ -75,11 +77,6 @@ exports.processTransactions = async () => {
 
             // Go to next transaction
             return
-        }
-
-        // Bundle together transaction and its abortController
-        const transactionData = {
-            transaction: transaction
         }
 
         // Set transaction status to in progress
@@ -143,41 +140,15 @@ exports.processTransactions = async () => {
 
             console.log('loop: Making request to ' + bankTo.transactionUrl);
 
-            const CancelToken = axios.CancelToken;
-            const source = CancelToken.source();
-
-            // Abort connection after 1 sec
-            timeout = setTimeout(() => {
-
-                console.log('loop: Aborting long-running transaction');
-
-                // Abort the request
-                source.cancel('Operation canceled by the user.');
-
-                // Set transaction status back to pending
-                transaction.status = 'pending'
-                transaction.statusDetail = 'Server is not responding'
-                transaction.save();
-
-            }, 2000)
-
             // Actually send the request
-            oServerResponse = await axios.post(bankTo.transactionUrl,
-                {jwt},
-                {cancelToken: source.token}
-            )
+            oServerResponse = await got.post(bankTo.transactionUrl, {json: {jwt}, timeout: 2000})
 
         } catch (e) {
-
-            if (axios.isCancel(e)) {
-                console.log('loop: Making request to another bank was cancelled due to timeout with the following message: ', e.message);
-            } else {
-                console.log('loop: Making request to another bank failed with the following message: ' + e.message)
-            }
+            console.log('loop: Making request to another bank failed with the following message: ' + e.message)
+            console.log(e.response && e.response.body ? '. Response: ' + e.response.body : '')
 
             transaction.status = 'failed'
-            transaction.statusDetail = 'The other bank said ' + oServerResponse.data
-            transactionData.abortController = null
+            transaction.statusDetail = e.message + (e.response && e.response.body ? '. Response: ' + e.response.body : '')
             transaction.save()
             return
         }

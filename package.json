@@ -16,6 +16,7 @@
     "dotenv": "^8.2.0",
     "exchange-rates-api": "^1.0.2",
     "express": "^4.17.1",
+    "got": "^11.8.0",
     "md5": "^2.3.0",
     "mongodb": "^3.6.2",
     "mongoose": "^5.10.7",
