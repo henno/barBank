@@ -184,6 +184,82 @@ paths:
       security:
         -
           Token: []
+      summary: Accepts new transaction
+  /transactions/b2b:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/postTransactionsB2bRequest'
+        required: true
+      tags:
+        - transactions
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/postTransactionsB2bResponse'
+              examples:
+                postTransactionsB2bResponseExample:
+                  value:
+                    receiverName: Jack Daniels
+          description: Transfer accepted
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+              examples:
+                Parsing JWT payload failed:
+                  value:
+                    error: 'Parsing JWT payload failed: reason here'
+                The account sending the funds does not belong to a bank registered in Central Bank:
+                  value:
+                    error: >-
+                      The account sending the funds does not belong to a bank registered
+                      in Central Bank
+                The jwksUrl of the bank is invalid:
+                  value:
+                    error: >-
+                      Cannot verify your signature: The jwksUrl of your bank
+                      (${bankFrom.jwksUrl}) is invalid: reason here
+                Invalid signature:
+                  value:
+                    error: Invalid signature
+          description: Bad request
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+              examples:
+                Account not found:
+                  value:
+                    error: Account not found
+          description: Account not found
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+              examples:
+                'Cannot verify your signature: The jwksUrl of your bank is missing':
+                  value:
+                    error: 'Cannot verify your signature: The jwksUrl of your bank is missing'
+          description: 'Cannot verify your signature: The jwksUrl of your bank is missing'
+        '502':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+              examples:
+                Central Bank error:
+                  value:
+                    error: 'Central Bank error: reason here'
+          description: Central Bank error
+      summary: Accepts new transaction from anoher bank
 components:
   schemas:
     postUsersRequest:
@@ -342,6 +418,39 @@ components:
         accountTo: BY000000001
         amount: 2
         explanation: Don’t go spend it all at once
+    postTransactionsB2bResponse:
+      description: ''
+      required:
+        - receiverName
+      type: object
+      properties:
+        receiverName:
+          description: The name of the person to whom the accountTo account belongs to
+          type: string
+      example:
+        receiverName: Jack Daniels
+    postTransactionsB2bRequest:
+      title: Root Type for postTransactionsB2b
+      description: ''
+      type: object
+      properties:
+        jwt:
+          description: >-
+            A JSON Web Token, containing the following payload:
+
+            {
+                "accountFrom": "abc123",
+                "accountTo": "xyz456",
+                "currency": "USD",
+                "amount": 2,
+                "explanation": "My two cents",
+                "senderName": "Donald Trump"
+            }, signed by the sending bank with its private key of which the public counterpart is
+            available at the bank's jwksUrl
+          type: string
+      example:
+        jwt: >-
+          base64EncodedHeaderContainingAlgorithmUsedToSignTheToken.base64EncodedPayloadPart.base64EncodedSignatureCalculatedWithPrivateKeyFromHeaderAndPayload
   securitySchemes:
     Token:
       scheme: bearer

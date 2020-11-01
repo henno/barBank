@@ -11,8 +11,10 @@
   "license": "ISC",
   "dependencies": {
     "abort-controller": "^3.0.0",
+    "axios": "^0.21.0",
     "bcrypt": "^5.0.0",
     "dotenv": "^8.2.0",
+    "exchange-rates-api": "^1.0.2",
     "express": "^4.17.1",
     "md5": "^2.3.0",
     "mongodb": "^3.6.2",
@@ -22,5 +24,8 @@
     "nodemon": "^2.0.4",
     "swagger-ui-express": "^4.1.4",
     "yamljs": "^0.3.0"
+  },
+  "devDependencies": {
+    "nock": "^13.0.4"
   }
 }

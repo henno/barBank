@@ -10,8 +10,7 @@ router.post('/', async (req, res, next) => {
     const user = await userModel.findOne({username: req.body.username})
 
     // Validate username and password
-    const passwordCheck = await bcrypt.compare(req.body.password, user.password)
-    if (!user || !passwordCheck) {
+    if (!user || !await bcrypt.compare(req.body.password, user.password)) {
         return res.status(401).json({error: 'Invalid username/password'})
     }
 
