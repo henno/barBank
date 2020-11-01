@@ -4,10 +4,10 @@ const transactionModel = require('./models/Transaction')
 const accountModel = require('./models/Account')
 const bankModel = require('./models/Bank')
 const fetch = require('node-fetch')
+const axios = require('axios')
 const jose = require('node-jose');
 const fs = require('fs');
 
-const abortController = require('abort-controller');
 require('dotenv').config()
 
 exports.verifyToken = async (req, res, next) => {
@@ -42,9 +42,7 @@ exports.verifyToken = async (req, res, next) => {
 
 exports.processTransactions = async () => {
 
-    let serverResponseAsJson
-        , serverResponseAsPlainText
-        , serverResponseAsObject
+    let oServerResponse
         , timeout
         , bankTo
 
@@ -81,8 +79,7 @@ exports.processTransactions = async () => {
 
         // Bundle together transaction and its abortController
         const transactionData = {
-            transaction: transaction,
-            abortController: new abortController()
+            transaction: transaction
         }
 
         // Set transaction status to in progress
@@ -146,90 +143,64 @@ exports.processTransactions = async () => {
 
             console.log('loop: Making request to ' + bankTo.transactionUrl);
 
+            const CancelToken = axios.CancelToken;
+            const source = CancelToken.source();
+
             // Abort connection after 1 sec
             timeout = setTimeout(() => {
 
                 console.log('loop: Aborting long-running transaction');
 
                 // Abort the request
-                transactionData.abortController.abort()
+                source.cancel('Operation canceled by the user.');
 
                 // Set transaction status back to pending
                 transaction.status = 'pending'
                 transaction.statusDetail = 'Server is not responding'
                 transaction.save();
 
-            }, 1000)
+            }, 2000)
 
             // Actually send the request
-            serverResponseAsObject = await fetch(bankTo.transactionUrl, {
-                signal: transactionData.abortController.signal,
-                method: 'POST',
-                body: JSON.stringify({jwt}),
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            })
-
-            // Get server response as plain text
-            serverResponseAsPlainText = await serverResponseAsObject.text()
-
-            console.log('loop: Remote server response: '+serverResponseAsPlainText);
+            oServerResponse = await axios.post(bankTo.transactionUrl,
+                {jwt},
+                {cancelToken: source.token}
+            )
 
         } catch (e) {
-            console.log('loop: Making request to another bank failed with the following message: ' + e.message)
+
+            if (axios.isCancel(e)) {
+                console.log('loop: Making request to another bank was cancelled due to timeout with the following message: ', e.message);
+            } else {
+                console.log('loop: Making request to another bank failed with the following message: ' + e.message)
+            }
+
+            transaction.status = 'failed'
+            transaction.statusDetail = 'The other bank said ' + oServerResponse.data
+            transactionData.abortController = null
+            transaction.save()
+            return
         }
 
         // Cancel aborting
         clearTimeout(timeout)
 
-        // Server did not respond (we aborted before that)
-        if (typeof serverResponseAsPlainText === 'undefined') {
-
-            // Stop processing this transaction for now and take the next one
-            return
-        }
-
-        // Attempt to parse server response from text to JSON
-        try {
-            serverResponseAsJson = JSON.parse(serverResponseAsPlainText)
-        } catch (e) {
-
-            // Log the error
-            console.log('loop: ' + e.message + ". Response was: " + serverResponseAsPlainText)
+        // Log bad responses from server to transaction statusDetail (including missing receiverName property)
+        if (oServerResponse.status < 200 || oServerResponse.status >= 300
+            || typeof oServerResponse.data.receiverName === 'undefined') {
+            console.log('loop: Server response was ' + oServerResponse.status);
             transaction.status = 'failed'
-            transaction.statusDetail = 'The other bank said ' + serverResponseAsPlainText
-            transactionData.abortController = null
-            transaction.save()
-
-            // Go to next transaction
-            return
-        }
-
-        // Log bad responses from server to transaction statusDetail
-        if (serverResponseAsObject.status < 200 || serverResponseAsObject.status >= 300) {
-            console.log('loop: Server response was ' + serverResponseAsObject.status);
-            transaction.status = 'failed'
-            transaction.statusDetail = typeof serverResponseAsJson.error !== 'undefined' ?
-                serverResponseAsJson.error : serverResponseAsPlainText
-            transaction.save()
-            return
-        }
-
-        // Check receiver name property existence
-        if (typeof serverResponseAsJson.receiverName === 'undefined') {
-            transaction.status = 'failed'
-            transaction.statusDetail = typeof serverResponseAsJson.error !== 'undefined' ?
-                serverResponseAsJson.error : serverResponseAsPlainText
+            transaction.statusDetail = typeof oServerResponse.data.error !== 'undefined' ?
+                oServerResponse.data.error : JSON.stringify(oServerResponse)
             transaction.save()
             return
         }
 
         // Add receiverName to transaction
-        transaction.receiverName = serverResponseAsJson.receiverName
+        transaction.receiverName = oServerResponse.data.receiverName
 
         // Deduct accountFrom
-        account = await accountModel.findOne({number: transaction.accountFrom})
+        const account = await accountModel.findOne({number: transaction.accountFrom})
         account.balance = account.balance - transaction.amount
         account.save();
 
