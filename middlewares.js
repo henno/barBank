@@ -4,7 +4,7 @@ const transactionModel = require('./models/Transaction')
 const accountModel = require('./models/Account')
 const bankModel = require('./models/Bank')
 const fetch = require('node-fetch')
-const got = require('got');
+const axios = require('axios');
 const jose = require('node-jose');
 const fs = require('fs');
 
@@ -138,17 +138,44 @@ exports.processTransactions = async () => {
         // Send request to remote bank
         try {
 
-            console.log('loop: Making request to ' + bankTo.transactionUrl);
 
             // Actually send the request
-            oServerResponse = await got.post(bankTo.transactionUrl, {json: {jwt}, timeout: 2000})
+            oServerResponse = await axios.post(bankTo.transactionUrl, {jwt}, {timeout: 2000})
+
+            // Debug log
+            console.log('loop: Made request to ' + bankTo.transactionUrl +':');
+            console.log(
+                'POST ' + (new URL(bankTo.transactionUrl)).pathname + '\n'
+                + Object.entries(oServerResponse.config.headers).map((h) => h[0] + ': ' + h[1]).join("\n")
+                + '\n\n'
+                + JSON.stringify({jwt}, null, 4))
 
         } catch (e) {
             console.log('loop: Making request to another bank failed with the following message: ' + e.message)
-            console.log(e.response && e.response.body ? '. Response: ' + e.response.body : '')
+
+            let url = e.response.config.url
+            let request = e.request._header + e.response.config.data;
+            let responseFirstLine = e.response.status + ' ' + e.response.statusText
+            let responseHeaders = Object.entries(e.response.headers).map((h) => h[0] + ': ' + h[1]).join("\n")
+            let responseBody = JSON.stringify(e.response.data)
+
+            let errorText =
+                '\nWhile making this request to ' + url + ':\n'
+                + '\n---BEGIN REQUEST---\n'
+                + request
+                + '\n---END REQUEST---\n'
+                + '\nThe following response was given:\n'
+                + '\n---BEGIN RESPONSE---\n'
+                + responseFirstLine + "\n"
+                + responseHeaders + "\n"
+                + "\n"
+                + responseBody
+                + '\n---END RESPONSE---\n'
+
+            console.log(errorText)
 
             transaction.status = 'failed'
-            transaction.statusDetail = e.message + (e.response && e.response.body ? '. Response: ' + e.response.body : '')
+            transaction.statusDetail = errorText
             transaction.save()
             return
         }
@@ -156,13 +183,53 @@ exports.processTransactions = async () => {
         // Cancel aborting
         clearTimeout(timeout)
 
+        // Print friendly error messages if something is missing:
+        if (!oServerResponse) {
+            console.log('loop: Unable to get server response');
+        }
+        if (!oServerResponse.status) {
+            console.log('loop: Unable to get status from server response');
+        } else {
+            console.log('loop: Server response status was ' + oServerResponse.status);
+        }
+        if (!oServerResponse.data) {
+            console.log('loop: Unable to get body from server response');
+        } else {
+            console.log('loop: Server response was:');
+            console.log(oServerResponse.status + ' ' + oServerResponse.statusText);
+            console.log(Object.entries(oServerResponse.request.res.headers).map((h) => h[0] + ': ' + h[1]).join("\n"));
+            console.log('');
+            console.log(oServerResponse.data);
+        }
+        if (!oServerResponse.data.receiverName) {
+            console.log('loop: Unable to get receiverName from server response body');
+        } else {
+            console.log('loop: receiverName was ' + oServerResponse.data.receiverName);
+        }
+
         // Log bad responses from server to transaction statusDetail (including missing receiverName property)
-        if (oServerResponse.status < 200 || oServerResponse.status >= 300
-            || typeof oServerResponse.data.receiverName === 'undefined') {
-            console.log('loop: Server response was ' + oServerResponse.status);
+        if (oServerResponse.status < 200 || oServerResponse.status >= 300) {
+            console.log('loop: Server response status was not positive. Setting transaction status to failed');
             transaction.status = 'failed'
             transaction.statusDetail = typeof oServerResponse.data.error !== 'undefined' ?
-                oServerResponse.data.error : JSON.stringify(oServerResponse)
+                oServerResponse.data.error : JSON.stringify(oServerResponse.data)
+            transaction.save()
+            return
+        }
+
+        if (!oServerResponse.data) {
+            console.log('loop: Server did not return JSON or the content-type was not json');
+            transaction.status = 'failed'
+            transaction.statusDetail = 'No JSON in response. The response was: ' + oServerResponse.data
+            transaction.save()
+            return
+        }
+
+        if (!oServerResponse.data.receiverName) {
+            console.log('loop: Server response did not have receiverName. It was: ' + oServerResponse.data);
+            transaction.status = 'failed'
+            transaction.statusDetail = typeof oServerResponse.data.error !== 'undefined' ?
+                oServerResponse.data.error : JSON.stringify(oServerResponse.data)
             transaction.save()
             return
         }
