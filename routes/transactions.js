@@ -250,6 +250,16 @@ router.post('/b2b', async (req, res, next) => {
 
 })
 
+router.get('/', verifyToken, async (req, res, next) => {
+
+    // Get user's transactions
+    const transactions = await transactionModel.find({userId: req.userId})
+
+    // Return them
+    res.status(200).json(transactions)
+
+})
+
 router.get('/jwks', async (req, res, next) => {
 
     // Create new keystore

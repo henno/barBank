@@ -124,6 +124,28 @@ paths:
           Token: []
       summary: Returns currently logged in user's data
   /transactions:
+    get:
+      tags:
+        - transactions
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/getTransactionsResponse'
+          description: Returns an array of user's transactions
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+              examples:
+                Invalid token:
+                  value:
+                    error: Invalid token
+      security:
+        -
+          Token: []
     post:
       requestBody:
         content:
@@ -451,6 +473,52 @@ components:
       example:
         jwt: >-
           base64EncodedHeaderContainingAlgorithmUsedToSignTheToken.base64EncodedPayloadPart.base64EncodedSignatureCalculatedWithPrivateKeyFromHeaderAndPayload
+    getTransactionsResponse:
+      description: ''
+      type: array
+      items:
+        $ref: '#/components/schemas/transactionObjectWithoutUserId'
+    transactionObjectWithoutUserId:
+      title: Root Type for transactionObjectWithoutUserId
+      description: ''
+      type: object
+      properties:
+        id:
+          description: Transaction Id
+          type: string
+        status:
+          description: 'One of: ''pending'', ''inProgress'', ''completed'', ''failed'''
+          type: string
+        amount:
+          type: string
+        currency:
+          type: string
+        accountFrom:
+          description: Sender's account
+          type: string
+        accountTo:
+          description: Receiver's account
+          type: string
+        explanation:
+          type: string
+        senderName:
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        statusDetail:
+          type: string
+      example:
+        id: 5f9f29303cad7017e6366ac4
+        status: completed
+        amount: '100'
+        currency: GBP
+        accountFrom: 260384e3ec3c752709787844f7d216020e3
+        accountTo: bac70679499
+        explanation: Don’t go spend it all at once
+        senderName: Miki Hiir
+        createdAt: '2020-11-01T21:32:45.697+00:00'
+        statusDetail: ''
   securitySchemes:
     Token:
       scheme: bearer
