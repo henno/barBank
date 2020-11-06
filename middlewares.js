@@ -140,10 +140,27 @@ exports.processTransactions = async () => {
 
 
             // Actually send the request
+
+            const nock = require('nock')
+            let nockScope
+
+            if (process.env.TEST_MODE === 'true') {
+
+                const nockUrl = new URL(bankTo.transactionUrl)
+
+                console.log('Nocking '+ JSON.stringify(nockUrl));
+
+                nockScope = nock(`${nockUrl.protocol}//${nockUrl.host}`)
+                    .persist()
+                    .post(nockUrl.pathname)
+                    .reply(200, {receiverName: 'foobar'})
+
+            }
+
             oServerResponse = await axios.post(bankTo.transactionUrl, {jwt}, {timeout: 2000})
 
             // Debug log
-            console.log('loop: Made request to ' + bankTo.transactionUrl +':');
+            console.log('loop: Made request to ' + bankTo.transactionUrl + ':');
             console.log(
                 'POST ' + (new URL(bankTo.transactionUrl)).pathname + '\n'
                 + Object.entries(oServerResponse.config.headers).map((h) => h[0] + ': ' + h[1]).join("\n")
@@ -195,8 +212,7 @@ exports.processTransactions = async () => {
         if (!oServerResponse.data) {
             console.log('loop: Unable to get body from server response');
         } else {
-            console.log('loop: Server response was:');
-            console.log(oServerResponse.status + ' ' + oServerResponse.statusText);
+            console.log('loop: Server response was: ' + oServerResponse.status + ' ' + oServerResponse.statusText);
             console.log(Object.entries(oServerResponse.request.res.headers).map((h) => h[0] + ': ' + h[1]).join("\n"));
             console.log('');
             console.log(oServerResponse.data);
@@ -274,13 +290,14 @@ exports.refreshBanksFromCentralBank = async () => {
             console.log('TEST_MODE=true');
             nock = require('nock')
             nockScope = nock(process.env.CENTRAL_BANK_URL)
+                .persist()
                 .get('/banks')
                 .reply(200,
                     [
                         {
                             "name": "fooBank",
                             "transactionUrl": "http://foobank.com/transactions/b2b",
-                            "bankPrefix": "foo",
+                            "bankPrefix": "843",
                             "owners": "John Smith",
                             "jwksUrl": "http://foobank.diarainfra.com/jwks.json"
                         },
